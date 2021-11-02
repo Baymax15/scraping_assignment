@@ -14,7 +14,7 @@ page_limit = 10
 SLEEP_TIME = 1
 
 # Output file
-output = 'output.csv'
+output = 'output/output.csv'
 
 # Headers to be used while fetching
 headers = {
