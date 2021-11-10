@@ -1,0 +1,9 @@
+version: "3"
+services:
+  scraper:
+    build: ./scraper
+    tty: true
+    volumes:
+      - type: bind
+        source: ./scraper/output
+        target: /output
