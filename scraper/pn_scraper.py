@@ -2,7 +2,8 @@ from bs4 import BeautifulSoup
 import time
 from datetime import datetime
 import requests
-import csv
+
+from pg_python.pg_python import *
 
 # Provided url
 url = 'https://www.ndtv.com/india#pfrom=home-ndtv_mainnavgation'
@@ -18,16 +19,22 @@ output = 'output/output.csv'
 
 # Headers to be used while fetching
 headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:93.0) Gecko/20100101 Firefox/93.0'
+    'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0'
 }
 
+db_name = 'postgres'
+username = 'postgres'
+password = 'postgres'
+host_address = 'localhost'
+table_name = 'ndtv_india'
+pgs = pg_server(db_name, username, password, host_address, server='default', application_name='pg_python')
 
 ############################################################################################
 
 class News_item:
     """News item, consisting of news title, link to news, date,
-	and some optional attributes.
-	"""
+    and some optional attributes.
+    """
 
     def __init__(self, title: str, link: str, date: str):
         self.title = title
@@ -58,7 +65,7 @@ class News_item:
 
 def get_soup(url, header):
     """Returns the soup object from given url
-	"""
+    """
     page = requests.get(url, headers=header)
     time.sleep(SLEEP_TIME)
     return BeautifulSoup(page.content, 'html5lib')
@@ -66,13 +73,13 @@ def get_soup(url, header):
 
 def get_main_page_list(soup, page_limit):
     """Returns a list of links from the given soup page
-	"""
+    """
     page_list = []
     pageline = soup.find('div', attrs={'class': 'listng_pagntn'})
 
     for item in pageline.find_all('a'):
         # if 'button' to next or previous page, ignore
-        if ('btnLnk' in item.attrs.get('class', [])):
+        if 'btnLnk' in item.attrs.get('class', []):
             continue
 
         # since only first {limit} pages
@@ -80,7 +87,7 @@ def get_main_page_list(soup, page_limit):
             break
 
         # if href not empty, add to list
-        if (href := item.attrs.get('href', '')):
+        if href := item.attrs.get('href', ''):
             page_list.append(href)
 
     return page_list
@@ -88,7 +95,7 @@ def get_main_page_list(soup, page_limit):
 
 def get_news_items(soup):
     """Returns news items from given soup
-	"""
+    """
     # To store results
     news_items = []
 
@@ -108,11 +115,11 @@ def get_news_items(soup):
         date = ''
         place = ['']
 
-        if (span.find('a')):
+        if span.find('a'):
             author = span.find('a').get_text().strip()
 
         tmp = span.get_text().split('|')
-        if (len(tmp)):
+        if len(tmp):
             date_place = span.get_text().split('|')[len(tmp) - 1].strip()
             date_temp, year, *place = [x.strip() for x in date_place.split(', ', maxsplit=2)]
             date = datetime.strptime(f'{date_temp} {year}', '%A %B %d %Y').strftime('%Y-%m-%d')
@@ -132,11 +139,11 @@ def get_news_items(soup):
 def fill_news_content(soup, news):
     """Returns the contents from a news page"""
 
-    if (content_desc := soup.find('h2', attrs={'class': 'sp-descp'})):
+    if content_desc := soup.find('h2', attrs={'class': 'sp-descp'}):
         news.set_description(content_desc.get_text().strip())
 
-    if (content_main := soup.find('div', attrs={'id': 'ins_storybody'})):
-        if (paras := content_main.findChildren('p', recursive=False)):
+    if content_main := soup.find('div', attrs={'id': 'ins_storybody'}):
+        if paras := content_main.findChildren('p', recursive=False):
             content_list = [x.get_text() for x in paras if x.contents]
             news.set_content('\t'.join(content_list))
 
@@ -167,7 +174,7 @@ for index, news in enumerate(news_items):
     content_soup = get_soup(news.link, headers)
     fill_news_content(content_soup, news)
 
-    if (index % 15 == 14):
+    if index % 15 == 14:
         print(f'Items in Page {int(index / 15) + 1} fetched.')
 # {news_items} contains every required data
 
@@ -176,11 +183,8 @@ for index, news in enumerate(news_items):
 print(f'Fetching completed.\nWriting to file: {output}')
 data_rows = [x.to_dict() for x in news_items]
 
-with open(output, 'w', newline='') as csvfile:
-    fields = list(news_items[0].to_dict().keys())
-    writer = csv.DictWriter(csvfile, fieldnames=fields, delimiter=',', quoting=csv.QUOTE_MINIMAL)
-    writer.writeheader()
-    writer.writerows(data_rows)
+for row in data_rows:
+    write(table_name, row)
 
 print('Printing a sample:')
 print(data_rows[0])
